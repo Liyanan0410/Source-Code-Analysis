@@ -1,0 +1,43 @@
+关于JAVA里面序列化，反序列化以及transient的使用总结
+	一个对象只要实现了Serializable接口，该对象就可以被序列化。然而在实际开发过程中，常常会遇到这样的
+问题，该类有些属性需要序列化，其他属性不需要被序列化。例如一个用户有一些敏感信息（如密码，银行卡号等）
+，为了安全起见，不希望在网络操作（主要涉及序列化）中被传输，这些信息对应的变量就可以加上transient关键
+字，这样变量的生命周期仅存在于调用者的内存中而不会被写到磁盘里持久化。   
+
+序列化与反序列化
+
+持久化对象、RMI（远程方法调用）、在网络中传递对象时，会用到对象序列化。在序列化对象时，不仅会序列化当
+前对象本身，还会对该对象引用的其他对象也进行序列化。
+序列化：把对象转换为字节序列的过程，这些字节序列包含了对象的数据和信息，一个序列化后的对象可以被写到数
+据库或文件中，也可用于网络传输，一般当我们使用缓存cache（内存空间不够有可能会本地存储到硬盘）或远程调
+用rpc（网络传输）的时候，经常需要让我们的实体类实现Serializable接口，目的就是为了让其可序列化。
+反序列化：把字节序列恢复为对象的过程，序列化后的最终目的是为了反序列化。
+java中只要实现了Serializable、Externalizable接口的类的对象就可被序列化。
+
+
+实现Java对象序列化与反序列化的方法
+
+方法一：若类仅仅实现了Serializable接口，则可以按照以下方式进行序列化和反序列化
+ObjectOutputStream采用默认的序列化方式，将对象的非transient的实例变量进行序列化。
+ObjcetInputStream采用默认的反序列化方式，将对象的非transient的实例变量进行反序列化。
+
+方法二：若类仅仅实现了Serializable接口，并且还定义了readObject(ObjectInputStream in)和writeObject
+(ObjectOutputSteam out)，则采用以下方式进行序列化与反序列化。
+ObjectOutputStream调用对象的writeObject(ObjectOutputStream out)的方法进行序列化。
+ObjectInputStream会调用对象的readObject(ObjectInputStream in)的方法进行反序列化。
+
+方法三：若类实现了Externalnalizable接口，且类必须实现readExternal(ObjectInput in)和writeExternal
+(ObjectOutput out)方法，则按照以下方式进行序列化与反序列化。
+ObjectOutputStream调用对象的writeExternal(ObjectOutput out))的方法进行序列化。
+ObjectInputStream会调用对象的readExternal(ObjectInput in)的方法进行反序列化。
+
+关于transient关键字
+
+Java中transient关键字的作用，简单地说，就是让某些被修饰的成员属性变量不被序列化，这一看好像很好理解，
+就是不被序列化，那么什么情况下，一个对象的某些字段不需要被序列化呢？如果有如下情况，可以考虑使用关键字
+transient修饰：
+1、类中的字段值可以根据其它字段推导出来，如一个长方形类有三个属性：长度、宽度、面积（示例而已，一般不
+会这样设计），那么在序列化的时候，面积这个属性就没必要被序列化了；
+2、其它，看具体业务需求吧，哪些字段不想被序列化；
+	为什么要不被序列化呢，主要是为了节省存储空间，其它的感觉没啥好处，可能还有坏处（有些字段可能需要重
+新计算，初始化什么的），总的来说，利大于弊。
