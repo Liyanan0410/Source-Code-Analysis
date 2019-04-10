@@ -350,6 +350,27 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     //因此只有hashCode()的低位参加运算，发生不同的hash值，但是得到的index相同的情况的几率会大大增加，这种情况称之为hash碰撞。
     //即，碰撞率会增大。
     //扰动函数就是为了解决hash碰撞的。它会综合hash值高位和低位的特征，并存放在低位，因此在与运算时，相当于高低位一起参与了运算，以减少hash碰撞的概率。
+//    1 对key的值首先进行hashCode()运算：通用方法，根据对象的内存地址，返回一个特定的哈希码
+//    2 二次处理哈希码 ：进行无符号右移16位，求得键对应的真正的hash值
+//    3 计算存储的数组的位置即hash值 ： 二次处理的哈希码和数组长度减一 进行异或运算
+//    4 获取到hash值后再和桶的长度减一进行异或，获取下标index
+    
+//    进行上面操作的目的
+//    提高 存储key-value的数组下标位置 的随机性 & 分布均匀性，尽量避免出现hash值冲突
+//    首先经过hashCode（）处理的哈希码为什么不能直接当桶的下标
+//    很简单，，，因为哈希码和数组的大小范围不匹配，就是直接计算出来的哈希码可能不在数组范围里面
+//
+//    为什么在计算数组下标前，需对哈希码进行二次处理：扰动处理？
+//    加大哈希码低位的随机性，使得分布更均匀，从而提高对应数组存储下标位置的随机性 & 均匀性，最终减少Hash冲突
+//
+//    为什么采用 哈希码 与运算(&) （数组长度-1） 计算数组下标？
+//    根据HashMap的容量大小（数组长度），按需取 哈希码一定数量的低位 作为存储的数组下标位置，从而 解决 “哈希码与数组大小范围不匹配” 的问题
+
+//    为撒要和桶的长度减一异或呢？
+//    由于哈希表的容量都是 2 的 N 次方，在当前，元素的 hashCode() 在很多时候下低位是相同的，这将导致冲突（碰撞）
+
+//    如果还是产生了频繁的碰撞，会发生什么问题呢？
+//    用树来处理频繁的碰撞。利用红黑树替换链表，这样复杂度就变成了O(1)+O(logn)了，这样在n很大的时候，能够比较理想的解决这个问题
     static final int hash(Object key) {
         int h;
         return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
@@ -392,8 +413,20 @@ public class HashMap<K,V> extends AbstractMap<K,V>
      * Returns a power of two size for the given target capacity.
      */
     //根据期望容量cap，返回2的n次方形式的 哈希桶的实际容量 length。 返回值一般会>=cap 
+//    		tableSizeFor(16) = 16
+//    		tableSizeFor(32) = 32
+//    		tableSizeFor(48) = 64
+//    		tableSizeFor(64) = 64
+//    		tableSizeFor(80) = 128
+//    		tableSizeFor(96) = 128
+//    		tableSizeFor(112) = 128
+//    		tableSizeFor(128) = 128
+//    		tableSizeFor(144) = 256
+    		
     static final int tableSizeFor(int cap) {
+    	//根据指定的容量设置阈值，这个方法经过若干次无符号右移、求异运算，得出最接近指定参数 cap 的 2 的 N 次方容量
     	//经过下面的 或 和位移 运算， n最终各位都是1。
+    	//反正因为使用了位运算，所以这个方法可能不能明确的知道结果，但是只要知道不管输入什么值，它的最后结果都会是0，1，2，4，8，16，32，68… 这些数字中的一个就对了（其实是有规律的）
         int n = cap - 1;
         n |= n >>> 1;
         n |= n >>> 2;
@@ -481,6 +514,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             throw new IllegalArgumentException("Illegal load factor: " +
                                                loadFactor);
         this.loadFactor = loadFactor;
+        //这里需要注意：带有参数的hash初始化，阈值的设置并不是桶长度*加载因子，而是直接根据期望容量得到一个最接近的2的n次方的容量，此时阈值直接等于容量，在resize()函数的桶为空的判断分支时，便可以直接设置新的容量直接等于阈值
         //设置阈值为  》=初始化容量的 2的n次方的值
         this.threshold = tableSizeFor(initialCapacity);
     }
@@ -795,6 +829,17 @@ public class HashMap<K,V> extends AbstractMap<K,V>
             Node<K,V>[] newTab = (Node<K,V>[])new Node[newCap];
         //更新哈希桶引用
         table = newTab;
+        
+        /*
+        上面操作的总结：
+        如果是最开始还没有元素的情况：
+            1、如果初始化的时候带了参数（HashMap(int initialCapacity, float loadFactor)），那么newCap就是你的initialCapacity参数（经过计算得到的最后的容量（阈值）数值为2的n次方）
+                	threshold就是 (int)(initialCapacity*loadFactor)
+            2、否则就按默认的算 initialCapacity = 16，threshold = 12（默认值以及加载因子的计算公式）
+        如果已经有元素了：
+        	那么直接扩容2倍，如果oldCap >= DEFAULT_INITIAL_CAPACITY了，那么threshold也扩大两倍
+    */
+
         if (oldTab != null) {
         	//遍历老的哈希桶
             for (int j = 0; j < oldCap; ++j) {
@@ -810,6 +855,7 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                     	//注意这里取下标 是用 哈希值 与 桶的长度-1 。 由于桶的长度是2的n次方，这么做其实是等于 一个模运算。但是效率更高
                         newTab[e.hash & (newCap - 1)] = e;
                     //如果发生过哈希碰撞 ,而且是节点数超过8个，转化成了红黑树（暂且不谈 避免过于复杂， 后续专门研究一下红黑树）
+                    //那么我们去将树上的节点rehash之后根据hash值放到新地方
                     else if (e instanceof TreeNode)
                         ((TreeNode<K,V>)e).split(this, newTab, j, oldCap);
                     //如果发生过哈希碰撞，节点数小于8个。则要根据链表上每个节点的哈希值，依次放入新哈希桶对应下标位置。
@@ -824,6 +870,29 @@ public class HashMap<K,V> extends AbstractMap<K,V>
                         do {
                             next = e.next;
                             //这里又是一个利用位运算 代替常规运算的高效点： 利用哈希值 与 旧的容量，可以得到哈希值去模后，是大于等于oldCap还是小于oldCap，等于0代表小于oldCap，应该存放在低位，否则存放在高位
+                            /*
+                            这里的操作就是 (e.hash & oldCap) == 0 这一句，
+                            这一句如果是true，表明(e.hash & (newCap - 1))还会和
+           e.hash & (oldCap - 1)一样。因为oldCap和newCap是2的次幂，
+                            并且newCap是oldCap的两倍，就相当于oldCap的唯一
+                            一个二进制的1向高位移动了一位(e.hash & oldCap) == 0就代表
+                            了(e.hash & (newCap - 1))还会和e.hash & (oldCap - 1)一样。
+
+                            比如原来容量是16，那么就相当于e.hash & 0x1111 
+                            （0x1111就是oldCap - 1 = 16 - 1 = 15），
+                            现在容量扩大了一倍，就是32，那么rehash定位就等于e.hash & 0x11111 
+                            （0x11111就是newCap - 1 = 32 - 1 = 31）
+                            现在(e.hash & oldCap) == 0就表明了
+           e.hash & 0x10000 == 0，这样的话，不就是
+                            已知： e.hash &  0x1111 = hash定位值Value
+                             并且  e.hash & 0x10000 = 0
+                            那么   e.hash & 0x11111 不也就是
+                            原来的hash定位值Value吗？
+
+                            那么就只需要根据这一个二进制位就可以判断下次hash定位在
+                            哪里了。将hash冲突的元素连在两条链表上放在相应的位置
+                            不就行了嘛。
+                        */
                             if ((e.hash & oldCap) == 0) {
                             	//给头尾节点指针赋值
                                 if (loTail == null)
@@ -857,6 +926,8 @@ public class HashMap<K,V> extends AbstractMap<K,V>
         }
         return newTab;
     }
+    //声明两对指针，维护两个连链表依次在末端添加新的元素。（在多线程操作的情况下，无非是第二个线程重复第一个线程一模一样的操作）
+    //1.8中hashmap的确不会因为多线程put导致死循环，但是依然有其他的弊端，比如数据丢失等等。因此多线程情况下还是建议使用concurrenthashmap。
 
     /**
      * Replaces all linked nodes in bin at index for given hash unless
@@ -2535,3 +2606,32 @@ public class HashMap<K,V> extends AbstractMap<K,V>
     }
 
 }
+
+//问题总结：
+//1什么时候会使用HashMap？他有什么特点？
+//是基于Map接口的实现，存储键值对时，它可以接收null的键值，是非同步的，HashMap存储着Entry(hash, key, value, next)对象，把这个当作一个结点，进行存储。
+//
+//2HashMap线程安全吗？为什么？
+//线程不安全，因为HashMap没有使用sychronized同步关键字，在添加数据put()时，无法做到线程同步，当多个线程在插入数据时，如果发生了哈希碰撞，可能会造成数据的丢失，然后在在扩容resize()时，也无法做到线程同步，当多个线程同时开启扩容，会各自生成新的数组进行拷贝扩容，最终结果只有一个新数组被赋值给table变量，其他的线程均会丢失。
+//
+//3如何保证HashMap线程安全
+//Hashtable，ConcurrentHashMap，Synchronized Map
+//
+//4.HashMap的工作原理？
+//通过hash的方法进行存储结构构建hash表，通过put和get存储和获取对象。存储对象时，我们将K/V传给put方法时，它调用hashCode计算hash从而得到bucket位置，进一步存储，HashMap会根据当前bucket的占用情况自动调整容量(超过Load Facotr则resize为原来的2倍)。获取对象时，我们将K传给get，它调用hashCode计算hash从而得到bucket位置，并进一步调用equals()方法确定键值对。如果发生碰撞的时候，Hashmap通过链表将产生碰撞冲突的元素组织起来，在Java 8中，如果一个bucket中碰撞冲突的元素超过某个限制(默认是8)，则使用红黑树来替换链表，从而提高速度。
+//
+//5.知道get和put的原理吗？equals()和hashCode()的都有什么作用？
+//对结点的key进行hash运算操作，计算下标，也就是要放到那个桶里面，如果碰撞的话，就在这个桶的链表或者树里面进行查询结点。
+//
+//6.hash的实现方式
+//在jdk1.8后，是通过hashCode()的高16位异或低16位实现的：(h = k.hashCode()) ^ (h >>> 16)，主要是从速度、功效、质量来考虑的，这么做可以在bucket的n比较小的时候，也能保证考虑到高低bit都参与到hash的计算中，同时不会有太大的开销
+//
+//7.扩容时候机制
+//jkd1.8这块，当发现现在的桶的占有量已经超过了容量 * 负载因子时候，进行扩容，直接扩容桶的数量为之前的2倍，并且重新调用hash方法，重新计算下标，然后再把之前的结点放到数组里面。
+
+
+
+
+
+
+
