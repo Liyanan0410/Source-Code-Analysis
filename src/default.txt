@@ -1,0 +1,85 @@
+Java关键字Default的两种使用方法:
+1.在switch语句的时候使用default
+2.在定义接口的时候使用default来修饰具体的方法 
+
+1.
+        int day = 8;
+        String dayString;
+        switch (day) {
+            case 1: dayString = "Monday";
+                    break;
+            case 2: dayString = "Tuesday";
+                    break;
+            case 3: dayString = "Wednesday";
+                    break;
+            case 4: dayString = "Thursday";
+                    break;
+            case 5: dayString = "Friday";
+                    break;
+            case 6: dayString = "Saturday";
+                    break;
+            //如果case没有匹配的值，那么肯定是星期日
+            default: dayString = "Sunday";
+                     break;
+        System.out.println(dayString);
+	使用比较简单，就是当case里的值与switch里的key没有匹配的时候，执行default里的方法。在这里的例子
+中就是key为8，所以key与所有的case的值都不匹配，所以输出星期天Sunday. 
+
+2.
+	接口的定义IntefercaeDemo，定义一个接口，里面有两个具体的方法，和一个抽象方法
+IntefercaeDemo .java：
+public interface IntefercaeDemo {
+
+    //具体方法
+    default void showDefault(){
+        System.out.println("this is showDefault method");
+    }
+    static void showStatic(){
+        System.out.println("this is showStatic method");
+    }
+
+    //没有实现的抽象方法
+    void sayHi();
+}
+LearnDefault 实现IntefercaeDemo 接口
+LearnDefault .java
+public class LearnDefault implements IntefercaeDemo{
+    //实现抽象方法
+    @Override
+    public void sayHi() {
+        System.out.println("this is sayHi mehtod");
+    }
+
+    public static void main(String[] args) {
+        //接口中被static所修饰的具体方法
+        IntefercaeDemo.showStatic();
+
+        //将实现了IntefercaeDemo的类实例化
+        LearnDefault learnDefault = new LearnDefault();
+        //被Default所修饰的具体方法可以通过引用变量来调用
+        learnDefault.showDefault();
+
+    }
+}
+	JDK1.8中为了加强接口的能力，使得接口可以存在具体的方法，前提是方法需要被default或static关键字
+所修饰。
+
+总结：
+	default修饰的目的是让接口可以拥有具体的方法，让接口内部包含了一些默认的方法实现。
+	被default修饰的方法是接口的默认方法。既只要实现该接口的类，都具有这么一个默认方法，默认方法也可以
+被重写。
+	我们可以想象这么一个场景，既实现某个接口的类都具有某个同样的功能，如果像Java8以前的版本，那么每个实现
+类都需要写一段重复的代码去实现那个功能，显得没有必要。这就是存在的意义。
+
+容易混淆的地方：
+	这里的关键字default不要跟平时我们在类中定义方法时，没有加任何访问修饰符时的(default)相混淆，它们的意义是
+不一样的。
+public class Demo{
+    //没有访问修饰符修饰，所以默认为(default)
+    String name;
+    void show(){}
+}
+	这里的(default)指的是一种场景，既类中成员没有被访问修饰符修饰，所以属于(default)的情况，效果是
+(default)情况的成员只能在Demo类所在的包内被访问。 
+	default关键字是一个实实在在存在的关键字，是需要显式声明的，目前只有所说的两种用法。与(default)场景
+毫无关系
